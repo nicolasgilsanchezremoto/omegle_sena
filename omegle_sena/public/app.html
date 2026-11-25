@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Omegle Ficha SENA - En Vivo</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="app-body">
+  <header class="topbar">
+    <div class="logo">
+      <span class="badge">SENA</span>
+      <strong>Ficha Connect</strong>
+    </div>
+    <div class="user-info">
+      <span id="my-username">Cargando...</span>
+      <button onclick="logout()" class="btn-logout">Salir</button>
+    </div>
+  </header>
+
+  <main class="main-grid">
+    <!-- Columna Izquierda: Cámaras -->
+    <section class="video-section">
+      <div class="video-box remote-box">
+        <video id="remote-video" autoplay playsinline></video>
+        <div id="status-overlay" class="overlay">Presiona "Siguiente / Buscar" para conectar con un compañero</div>
+        <span id="partner-label" class="video-tag hidden">Compañero</span>
+      </div>
+
+      <div class="video-box local-box">
+        <video id="local-video" autoplay playsinline muted></video>
+        <span class="video-tag">Tú</span>
+      </div>
+    </section>
+
+    <!-- Columna Derecha: Controles y Chat Interno -->
+    <section class="chat-section">
+      <div class="controls">
+        <button id="btn-next" class="btn-next" onclick="findPartner()">Siguiente / Buscar</button>
+        <button id="btn-stop" class="btn-stop" onclick="stopChat()" disabled>Detener</button>
+        <button id="btn-mute" class="btn-media" onclick="toggleAudio()">🎤 Mic: ON</button>
+        <button id="btn-cam" class="btn-media" onclick="toggleVideo()">📷 Cam: ON</button>
+      </div>
+
+      <div id="chat-messages" class="chat-box">
+        <div class="sys-msg">Bienvenido al chat de la ficha. Respeta a tus compañeros.</div>
+      </div>
+
+      <form id="chat-form" class="chat-input-area">
+        <input type="text" id="msg-input" placeholder="Escribe un mensaje aquí..." autocomplete="off" disabled>
+        <button type="submit" id="btn-send" disabled>Enviar</button>
+      </form>
+    </section>
+  </main>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="client.js"></script>
+</body>
+</html>

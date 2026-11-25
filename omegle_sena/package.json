@@ -1,0 +1,16 @@
+{
+  "name": "omegle-sena",
+  "version": "1.0.0",
+  "description": "Videochat aleatorio privado con autenticación para ficha SENA",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "express": "^4.18.2",
+    "express-session": "^1.17.3",
+    "socket.io": "^4.7.2",
+    "sqlite3": "^5.1.6"
+  }
+}

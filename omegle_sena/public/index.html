@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Omegle Ficha SENA - Acceso</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="auth-body">
+  <div class="auth-card">
+    <div class="brand">
+      <span class="badge">SENA</span>
+      <h1>Ficha Connect</h1>
+      <p>Videochat aleatorio exclusivo para aprendices de la ficha</p>
+    </div>
+
+    <div class="tabs">
+      <button id="tab-login" class="active" onclick="switchTab('login')">Iniciar Sesión</button>
+      <button id="tab-register" onclick="switchTab('register')">Registrarse</button>
+    </div>
+
+    <form id="auth-form">
+      <div class="input-group">
+        <label>Nombre de Usuario (Ej: Nicolas_G)</label>
+        <input type="text" id="username" required minlength="3" placeholder="Tu nombre o apodo">
+      </div>
+      <div class="input-group">
+        <label>Contraseña</label>
+        <input type="password" id="password" required minlength="4" placeholder="••••••••">
+      </div>
+      <p id="error-msg" class="error-text"></p>
+      <button type="submit" id="submit-btn" class="btn-primary">Entrar a la Sala</button>
+    </form>
+  </div>
+
+  <script>
+    let mode = 'login';
+
+    // Verificar si ya hay sesión activa
+    fetch('/api/me').then(res => {
+      if (res.ok) window.location.href = '/app.html';
+    });
+
+    function switchTab(newMode) {
+      mode = newMode;
+      document.getElementById('tab-login').classList.toggle('active', mode === 'login');
+      document.getElementById('tab-register').classList.toggle('active', mode === 'register');
+      document.getElementById('submit-btn').textContent = mode === 'login' ? 'Entrar a la Sala' : 'Crear Cuenta y Entrar';
+      document.getElementById('error-msg').textContent = '';
+    }
+
+    document.getElementById('auth-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const username = document.getElementById('username').value;
+      const password = document.getElementById('password').value;
+      const errorEl = document.getElementById('error-msg');
+      errorEl.textContent = '';
+
+      const endpoint = mode === 'login' ? '/api/login' : '/api/register';
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password })
+      });
+
+      const data = await res.json();
+      if (res.ok) {
+        window.location.href = '/app.html';
+      } else {
+        errorEl.textContent = data.error || 'Ocurrió un error';
+      }
+    });
+  </script>
+</body>
+</html>
