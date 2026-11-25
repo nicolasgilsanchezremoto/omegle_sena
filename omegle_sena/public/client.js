@@ -1,4 +1,8 @@
-const socket = io();
+const socket = io({
+  reconnection: true,
+  reconnectionAttempts: 10,
+  reconnectionDelay: 1000
+});
 
 const localVideo = document.getElementById('local-video');
 const remoteVideo = document.getElementById('remote-video');
@@ -13,6 +17,7 @@ let localStream = null;
 let peerConnection = null;
 let myUsername = '';
 let currentPartner = '';
+let isMatched = false;
 let pendingIceCandidates = [];
 let hasRemoteDescription = false;
 
@@ -22,6 +27,14 @@ let rtcConfig = {
     { urls: 'stun:stun1.l.google.com:19302' }
   ]
 };
+
+function setChatEnabled(enabled) {
+  msgInput.disabled = !enabled;
+  btnSend.disabled = !enabled;
+  if (enabled) {
+    msgInput.focus();
+  }
+}
 
 async function initMedia() {
   if (localStream) return true;
@@ -34,20 +47,21 @@ async function initMedia() {
     localVideo.srcObject = localStream;
     return true;
   } catch (err) {
-    // Si la cámara está en uso por otra pestaña del mismo PC, intenta solo audio
     try {
       localStream = await navigator.mediaDevices.getUserMedia({ video: false, audio: true });
       localVideo.srcObject = localStream;
-      addSystemMessage('Cámara ocupada en otro dispositivo/pestaña; conectado con micrófono.');
+      addSystemMessage('Cámara no disponible o en uso; conectado con micrófono.');
       return true;
     } catch (audioErr) {
-      addSystemMessage('Permite cámara/micrófono o entra por HTTPS para usar video.');
+      addSystemMessage('Permite cámara y micrófono en el navegador para usar el videochat.');
       return false;
     }
   }
 }
 
 async function init() {
+  setChatEnabled(false);
+
   const meRes = await fetch('/api/me');
   if (!meRes.ok) {
     window.location.href = '/';
@@ -69,14 +83,21 @@ async function init() {
 }
 
 function createPeerConnection() {
-  closePeerConnection();
+  if (peerConnection) {
+    peerConnection.ontrack = null;
+    peerConnection.onicecandidate = null;
+    peerConnection.onconnectionstatechange = null;
+    peerConnection.close();
+    peerConnection = null;
+  }
+
   hasRemoteDescription = false;
   pendingIceCandidates = [];
 
   peerConnection = new RTCPeerConnection(rtcConfig);
 
   if (localStream) {
-    localStream.getTracks().forEach(track => {
+    localStream.getTracks().forEach((track) => {
       peerConnection.addTrack(track, localStream);
     });
   }
@@ -84,6 +105,7 @@ function createPeerConnection() {
   peerConnection.ontrack = (event) => {
     if (event.streams && event.streams[0]) {
       remoteVideo.srcObject = event.streams[0];
+      statusOverlay.classList.add('hidden');
     }
   };
 
@@ -96,7 +118,7 @@ function createPeerConnection() {
   peerConnection.onconnectionstatechange = () => {
     if (!peerConnection) return;
     if (peerConnection.connectionState === 'failed') {
-      addSystemMessage('La conexión de video falló por red/firewall. Intenta "Siguiente / Buscar" o configura TURN.');
+      addSystemMessage('No se pudo establecer el video con tu compañero. Prueba "Siguiente / Buscar".');
     }
   };
 }
@@ -113,7 +135,7 @@ async function flushPendingIce() {
   }
 }
 
-function closePeerConnection() {
+function resetConnectionState(keepOverlayMessage = '') {
   if (peerConnection) {
     peerConnection.ontrack = null;
     peerConnection.onicecandidate = null;
@@ -121,30 +143,35 @@ function closePeerConnection() {
     peerConnection.close();
     peerConnection = null;
   }
+
+  isMatched = false;
+  currentPartner = '';
   hasRemoteDescription = false;
   pendingIceCandidates = [];
   remoteVideo.srcObject = null;
+
+  partnerLabel.textContent = 'Compañero';
   partnerLabel.classList.add('hidden');
-  msgInput.disabled = true;
-  btnSend.disabled = true;
+  setChatEnabled(false);
+
+  if (keepOverlayMessage) {
+    statusOverlay.textContent = keepOverlayMessage;
+    statusOverlay.classList.remove('hidden');
+  }
 }
 
 async function findPartner() {
   await initMedia();
-  closePeerConnection();
+  resetConnectionState('Buscando compañero disponible de la ficha...');
   chatBox.innerHTML = '';
-  addSystemMessage('Buscando un compañero disponible de la ficha...');
-  statusOverlay.textContent = 'Buscando compañero...';
-  statusOverlay.classList.remove('hidden');
+  addSystemMessage('Buscando compañero disponible...');
   btnStop.disabled = false;
   socket.emit('find-partner');
 }
 
 function stopChat() {
-  closePeerConnection();
+  resetConnectionState('Chat detenido. Presiona "Siguiente / Buscar" para volver.');
   socket.emit('stop-chat');
-  statusOverlay.textContent = 'Chat detenido. Presiona "Siguiente / Buscar" para volver.';
-  statusOverlay.classList.remove('hidden');
   btnStop.disabled = true;
   addSystemMessage('Has detenido la conexión.');
 }
@@ -166,26 +193,41 @@ function toggleVideo() {
 }
 
 async function logout() {
-  closePeerConnection();
+  resetConnectionState('');
   socket.emit('stop-chat');
   await fetch('/api/logout', { method: 'POST' });
   window.location.href = '/';
 }
 
+socket.on('connect', () => {
+  // Si ya había un match activo y el socket reconectó, reactiva el chat
+  if (isMatched && currentPartner) {
+    setChatEnabled(true);
+  }
+});
+
 socket.on('waiting', () => {
+  isMatched = false;
+  setChatEnabled(false);
   statusOverlay.textContent = 'Esperando a que otro compañero de la ficha presione Buscar...';
+  statusOverlay.classList.remove('hidden');
 });
 
 socket.on('matched', async ({ partnerName, initiator }) => {
-  currentPartner = partnerName;
-  statusOverlay.classList.add('hidden');
-  partnerLabel.textContent = partnerName;
+  isMatched = true;
+  currentPartner = partnerName || 'Compañero';
+
+  partnerLabel.textContent = currentPartner;
   partnerLabel.classList.remove('hidden');
-  msgInput.disabled = false;
-  btnSend.disabled = false;
+
+  statusOverlay.textContent = `Conectando video con ${currentPartner}...`;
+  statusOverlay.classList.remove('hidden');
+
+  setChatEnabled(true);
+  btnStop.disabled = false;
 
   chatBox.innerHTML = '';
-  addSystemMessage(`¡Conectado con ${partnerName}! Ya pueden escribir y verse.`);
+  addSystemMessage(`¡Conectado con ${currentPartner}! Ya pueden escribir.`);
 
   createPeerConnection();
 
@@ -240,14 +282,15 @@ socket.on('webrtc-ice-candidate', async (candidate) => {
 });
 
 socket.on('partner-disconnected', () => {
-  closePeerConnection();
-  statusOverlay.textContent = `${currentPartner || 'Tu compañero'} se desconectó. Presiona "Siguiente / Buscar".`;
-  statusOverlay.classList.remove('hidden');
-  addSystemMessage(`${currentPartner || 'Tu compañero'} abandonó la conversación.`);
+  const disconnectedName = currentPartner || 'Tu compañero';
+  resetConnectionState(`${disconnectedName} se desconectó. Presiona "Siguiente / Buscar".`);
+  addSystemMessage(`${disconnectedName} abandonó la conversación.`);
 });
 
 document.getElementById('chat-form').addEventListener('submit', (e) => {
   e.preventDefault();
+  if (!isMatched || msgInput.disabled) return;
+
   const text = msgInput.value.trim();
   if (!text) return;
 
@@ -277,8 +320,12 @@ function addSystemMessage(text) {
 }
 
 function escapeHtml(str) {
-  return str.replace(/[&<>"']/g, m => ({
-    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  return str.replace(/[&<>"']/g, (m) => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;'
   }[m]));
 }
 
