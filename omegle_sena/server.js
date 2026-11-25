@@ -39,23 +39,29 @@ app.use(sessionMiddleware);
 app.use(express.static(path.join(__dirname, 'public')));
 io.engine.use(sessionMiddleware);
 
-// Pasar configuración ICE (STUN + TURN) al cliente de forma segura
+// Configuración ICE (STUN + TURN desde variables de entorno)
 app.get('/api/ice-config', (req, res) => {
   if (!req.session.user) return res.status(401).json({ error: 'No autenticado' });
 
   const iceServers = [
     { urls: 'stun:stun.l.google.com:19302' },
     { urls: 'stun:stun1.l.google.com:19302' },
-    { urls: 'stun:stun2.l.google.com:19302' }
+    { urls: 'stun:stun.relay.metered.ca:80' }
   ];
 
   if (process.env.TURN_URLS && process.env.TURN_USERNAME && process.env.TURN_CREDENTIAL) {
-    const urls = process.env.TURN_URLS.split(',').map(u => u.trim()).filter(Boolean);
-    iceServers.push({
-      urls,
-      username: process.env.TURN_USERNAME.trim(),
-      credential: process.env.TURN_CREDENTIAL.trim()
-    });
+    const urls = process.env.TURN_URLS
+      .split(',')
+      .map((u) => u.trim())
+      .filter(Boolean);
+
+    if (urls.length > 0) {
+      iceServers.push({
+        urls,
+        username: process.env.TURN_USERNAME.trim(),
+        credential: process.env.TURN_CREDENTIAL.trim()
+      });
+    }
   }
 
   res.json({ iceServers });
@@ -116,8 +122,8 @@ app.get('/app.html', (req, res, next) => {
   next();
 });
 
-// 4. Cola de espera múltiple (FIFO) para 18+ personas
-const waitingQueue = []; // Array de socket.id en espera
+// 4. Emparejamiento Aleatorio (Cola FIFO para 18+ personas)
+const waitingQueue = [];
 const activePairs = new Map(); // socket.id -> partnerSocket.id
 
 function removeFromQueue(socketId) {
@@ -166,7 +172,6 @@ io.on('connection', (socket) => {
   socket.username = user.username;
 
   socket.on('find-partner', () => {
-    // Limpia cualquier pareja o espera previa de este socket
     disconnectPartner(socket, true);
 
     const partner = getNextValidPartner(socket.id);
@@ -174,7 +179,6 @@ io.on('connection', (socket) => {
       activePairs.set(socket.id, partner.id);
       activePairs.set(partner.id, socket.id);
 
-      // El compañero que ya estaba en cola inicia la oferta SDP
       partner.emit('matched', { partnerName: socket.username, initiator: true });
       socket.emit('matched', { partnerName: partner.username, initiator: false });
     } else {
