@@ -19,17 +19,17 @@
   </header>
 
   <main class="main-grid">
-    <!-- Columna Izquierda: Cámaras -->
+    <!-- Columna Izquierda: Tú arriba, el otro aprendiz debajo -->
     <section class="video-section">
+      <div class="video-box local-box">
+        <video id="local-video" autoplay playsinline muted></video>
+        <span class="video-tag">Tú (Aprendiz)</span>
+      </div>
+
       <div class="video-box remote-box">
         <video id="remote-video" autoplay playsinline></video>
         <div id="status-overlay" class="overlay">Presiona "Siguiente / Buscar" para conectar con un compañero</div>
         <span id="partner-label" class="video-tag hidden">Compañero</span>
-      </div>
-
-      <div class="video-box local-box">
-        <video id="local-video" autoplay playsinline muted></video>
-        <span class="video-tag">Tú</span>
       </div>
     </section>
 
