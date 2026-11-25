@@ -102,9 +102,19 @@ function createPeerConnection() {
     });
   }
 
+  // --- REEMPLAZA DESDE AQUÍ ---
   peerConnection.ontrack = (event) => {
     if (event.streams && event.streams[0]) {
       remoteVideo.srcObject = event.streams[0];
+      remoteVideo.play().catch(() => {});
+      statusOverlay.classList.add('hidden');
+    } else if (event.track) {
+      const inboundStream = remoteVideo.srcObject instanceof MediaStream
+        ? remoteVideo.srcObject
+        : new MediaStream();
+      inboundStream.addTrack(event.track);
+      remoteVideo.srcObject = inboundStream;
+      remoteVideo.play().catch(() => {});
       statusOverlay.classList.add('hidden');
     }
   };
@@ -114,6 +124,16 @@ function createPeerConnection() {
       socket.emit('webrtc-ice-candidate', event.candidate);
     }
   };
+
+  peerConnection.oniceconnectionstatechange = () => {
+    if (!peerConnection) return;
+    const state = peerConnection.iceConnectionState;
+    if (state === 'failed' || state === 'disconnected') {
+      statusOverlay.textContent = `Sin ruta de video con ${currentPartner || 'el compañero'} (posible bloqueo de red). Prueba "Siguiente / Buscar".`;
+      statusOverlay.classList.remove('hidden');
+    }
+  };
+  // --- HASTA AQUÍ ---
 
   peerConnection.onconnectionstatechange = () => {
     if (!peerConnection) return;
